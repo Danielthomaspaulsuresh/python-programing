@@ -13,7 +13,6 @@ class Myclass:
 
 p1 = Myclass()
 print(p1.x)
-"""
  # OOPS
 
  
@@ -41,3 +40,4 @@ audi.speed = 299
 print("audi = ", audi.speed)
 print("audi = ", audi.mileage)
 audi.backward()
+"""

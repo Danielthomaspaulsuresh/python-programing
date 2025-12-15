@@ -1,0 +1,1339 @@
+"use strict";
+
+function _slicedToArray(r, e) { return _arrayWithHoles(r) || _iterableToArrayLimit(r, e) || _unsupportedIterableToArray(r, e) || _nonIterableRest(); }
+function _nonIterableRest() { throw new TypeError("Invalid attempt to destructure non-iterable instance.\nIn order to be iterable, non-array objects must have a [Symbol.iterator]() method."); }
+function _unsupportedIterableToArray(r, a) { if (r) { if ("string" == typeof r) return _arrayLikeToArray(r, a); var t = {}.toString.call(r).slice(8, -1); return "Object" === t && r.constructor && (t = r.constructor.name), "Map" === t || "Set" === t ? Array.from(r) : "Arguments" === t || /^(?:Ui|I)nt(?:8|16|32)(?:Clamped)?Array$/.test(t) ? _arrayLikeToArray(r, a) : void 0; } }
+function _arrayLikeToArray(r, a) { (null == a || a > r.length) && (a = r.length); for (var e = 0, n = Array(a); e < a; e++) n[e] = r[e]; return n; }
+function _iterableToArrayLimit(r, l) { var t = null == r ? null : "undefined" != typeof Symbol && r[Symbol.iterator] || r["@@iterator"]; if (null != t) { var e, n, i, u, a = [], f = !0, o = !1; try { if (i = (t = t.call(r)).next, 0 === l) { if (Object(t) !== t) return; f = !1; } else for (; !(f = (e = i.call(t)).done) && (a.push(e.value), a.length !== l); f = !0); } catch (r) { o = !0, n = r; } finally { try { if (!f && null != t["return"] && (u = t["return"](), Object(u) !== u)) return; } finally { if (o) throw n; } } return a; } }
+function _arrayWithHoles(r) { if (Array.isArray(r)) return r; }
+/*
+  RightHandSideMenu (modern)
+  - Shows a compact right-hand dashboard for paying customers
+  - 100% aligned with reference design
+*/
+
+(function () {
+  if (window.RightHandSideMenu) {
+    return;
+  }
+  var RightHandSideMenu = {
+    _rendered: false,
+    _styleId: 'rhs-menu-modern-style',
+    _listenerAttached: {},
+    _apiDataLoaded: false
+  };
+
+  // Get user profile picture
+  RightHandSideMenu._getUserProfilePicture = function () {
+    if (typeof UserSession !== 'undefined' && typeof UserSession.getCachedProfilePictureUrl === 'function') {
+      return UserSession.getCachedProfilePictureUrl();
+    }
+    return null;
+  };
+
+  // Early user check - can run immediately when script loads
+  RightHandSideMenu._userIsPayingEarly = function () {
+    try {
+      // Check UIC cookie directly - this is available immediately
+      if (typeof UserSession !== 'undefined' && typeof UserSession.getUicCookie === 'function') {
+        var uic = UserSession.getUicCookie();
+        if (uic && (uic.plan && uic.plan.toLowerCase() !== 'free' || uic.fa === true)) {
+          return true;
+        }
+      }
+    } catch (e) {}
+    return false;
+  };
+
+  // User check
+  RightHandSideMenu._userIsPaying = function () {
+    try {
+      var loggedIn = false;
+      if (typeof UserSession !== 'undefined') {
+        if (typeof UserSession.getUicCookie === 'function' && UserSession.getUicCookie()) loggedIn = true;
+        if (UserSession.loggedIn === true) loggedIn = true;
+      }
+      if (typeof TopNavBar !== 'undefined' && TopNavBar.loggedIn === true) loggedIn = true;
+      if (typeof UserSession !== 'undefined' && typeof UserSession.getUicCookie === 'function') {
+        var uic = UserSession.getUicCookie();
+        if (uic && (uic.plan && uic.plan.toLowerCase() !== 'free' || uic.fa === true) && loggedIn) return true;
+      }
+      if (typeof UserSession !== 'undefined' && typeof UserSession.getUserSubscriptionPlan === 'function') {
+        var plan = UserSession.getUserSubscriptionPlan();
+        if (plan && plan.toLowerCase() !== 'free' && loggedIn) return true;
+      }
+      if (typeof TopNavBar !== 'undefined' && TopNavBar.subscriptionPlan) {
+        if (TopNavBar.subscriptionPlan.toLowerCase() !== 'free' && loggedIn) return true;
+      }
+      if (typeof TopNavBar !== 'undefined' && TopNavBar.cachedUserData && TopNavBar.cachedUserData.subscriptionPlan) {
+        if (TopNavBar.cachedUserData.subscriptionPlan.toLowerCase() !== 'free' && loggedIn) return true;
+      }
+    } catch (e) {}
+    return false;
+  };
+
+  // CSS injection
+  RightHandSideMenu._injectCss = function () {
+    if (document.getElementById(RightHandSideMenu._styleId)) return;
+    var css = '@import url("https://fonts.googleapis.com/css2?family=Source+Sans+Pro:wght@400;500;600;700&display=swap");' + '@import url("https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css");' + '.rhs-menu{--rhs-bg:#eef3fb;--rhs-card:#ffffff;--rhs-border:#d9e3fb;--rhs-text:#20273d;--rhs-muted:#6c7390;--rhs-pill:#f5f7ff;--rhs-plus-bg:#ede4ff;--rhs-plus-text:#6d58d6;--rhs-accent-1:#8ea6ff;--rhs-accent-2:#5eb376;--rhs-accent-3:#f6c55d;--rhs-shadow:rgba(30,44,92,.06);--rhs-radius:8px}' + '.rhs-menu .sidebar{box-sizing:border-box;width:270px;background:var(--rhs-card);border-left:1px solid #F1F1F1;border-radius:0px;padding:14px 12px;display:flex;flex-direction:column;gap:8px;font-family:"Source Sans Pro","Segoe UI",sans-serif;color:var(--rhs-text);margin-left:auto}' + '.rhs-menu .sidebar *{box-sizing:border-box}' + '.rhs-menu .profile{display:flex;align-items:flex-start;gap:8px}' + '.rhs-menu .profile-details{flex:1;display:flex;flex-direction:column;gap:0}' + '.rhs-menu .profile-meta{display:flex;align-items:flex-start;gap:2px}' + '.rhs-menu .avatar{width:56px;height:56px;border-radius:var(--rhs-radius);display:grid;place-items:center;font-weight:600;margin-top:0px}' + '.rhs-menu .avatar img{width:100%;height:100%;object-fit:contain}' + '.rhs-menu .profile-name{font-size:14px;margin:16px 0 0 0;text-align:left}' + '.rhs-menu .profile-link{color:var(--rhs-muted);font-size:12px;text-decoration:none}' + '.rhs-menu .profile-link:hover{text-decoration:underline}' + '.rhs-menu .chevron{color:var(--rhs-muted);font-size:20px;margin-left:4px;position:relative;top:-6px}' + '.rhs-menu .stats{display:flex;gap:8px}' + '.rhs-menu .stat-card{background:var(--rhs-card);border:1px solid var(--rhs-border);border-radius:var(--rhs-radius);padding:6px 10px;display:flex;align-items:center;gap:6px;min-width:40px;position:relative}' + '.rhs-menu .stat-icon{display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;width:24px;height:24px;border-radius:var(--rhs-radius);color:var(--rhs-card)}' + '.rhs-menu .stat-icon svg{width:14px;height:14px}' + '.rhs-menu .stat-value{font-weight:600;font-size:14px;color:var(--rhs-text)}' + '.rhs-menu .stat-icon--xp{background:var(--rhs-accent-1)}' + '.rhs-menu .stat-icon--streak{background:var(--rhs-accent-2)}' + '.rhs-menu .stat-icon--boost{background:var(--rhs-accent-3);color:#fff;text-shadow:0 0 0 #fff}' + '.rhs-menu .stat-tooltip{position:absolute;background:#333;color:white;padding:8px 12px;border-radius:6px;font-size:12px;white-space:normal;z-index:1000;opacity:0;visibility:hidden;transition:opacity 0.2s,visibility 0.2s;pointer-events:none;width:200px;max-width:200px;line-height:1.3}' + '.rhs-menu .stat-tooltip::after{content:"";position:absolute;top:50%;transform:translateY(-50%);width:0;height:0;border:5px solid transparent}' + '.rhs-menu .stat-tooltip--left{right:100%;margin-right:8px}' + '.rhs-menu .stat-tooltip--left::after{right:-10px;border-left-color:#333}' + '.rhs-menu .stat-tooltip--right{left:100%;margin-left:8px}' + '.rhs-menu .stat-tooltip--right::after{left:-10px;border-right-color:#333}' + '.rhs-menu .stat-card:hover .stat-tooltip{opacity:1;visibility:visible}' + '.rhs-menu .plus-banner{background:var(--rhs-plus-bg);color:var(--rhs-plus-text);border-radius:var(--rhs-radius);padding:6px 8px;text-align:center;font-weight:500;font-size:13px}' + '.rhs-menu .panel{border:1px solid var(--rhs-border);border-radius:var(--rhs-radius);padding:12px;background:var(--rhs-card);display:grid;gap:8px}' + '.rhs-menu .progress-panel{padding-bottom:20px}' + '.rhs-menu #rhs-progress-list{max-height:0;overflow:hidden;transition:max-height 0.5s ease-in-out}' + '.rhs-menu #rhs-progress-list.loaded{max-height:150px}' + '.rhs-menu a.panel{text-decoration:none;color:inherit}' + '.rhs-menu .panel-title{margin:0;font-size:15px;text-align:left}' + '.rhs-menu .progress-title{display:flex;justify-content:space-between;align-items:center;cursor:pointer}' + '.rhs-menu .progress-chevron{font-size:16px;color:var(--rhs-muted);transition:transform 0.3s ease;user-select:none}' + '.rhs-menu .progress-chevron.expanded{transform:rotate(90deg)}' + '.rhs-menu .progress-panel.collapsed #rhs-progress-list{max-height:0;overflow:hidden}' + '.rhs-menu .progress-panel.expanded #rhs-progress-list{max-height:1200px;overflow:auto}' + '.rhs-menu .progress-panel:not(.expanded) #rhs-progress-list{max-height:150px}' + '.rhs-menu .activity-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px}' + '.rhs-menu .activity-card{background:transparent;border-radius:var(--rhs-radius);padding:4px 2px;display:grid;justify-items:center;text-align:center;gap:2px;min-width:0}' + '.rhs-menu .activity-card-link{text-decoration:none;color:inherit;display:contents}' + '.rhs-menu .activity-card-link:hover{text-decoration:none}' + '.rhs-menu .activity-card-link:hover .activity-label{text-decoration:underline}' + '.rhs-menu .activity-number{font-size:16px;font-weight:500;color:var(--rhs-text);margin:0;line-height:1.2;position:relative;top:-2px}' + '.rhs-menu .activity-label{font-size:10px;color:var(--rhs-muted);margin:0;line-height:1.2;word-break:break-word}' + '.rhs-menu .progress-item{display:grid;grid-template-columns:auto 1fr auto;align-items:center;column-gap:8px;row-gap:4px}' + '.rhs-menu .progress-item+.progress-item{margin-top:6px}' + '.rhs-menu .progress-label{font-weight:600;font-size:13px}' + '.rhs-menu .progress-link{color:var(--rhs-text);text-decoration:none}' + '.rhs-menu .progress-link:hover{color:var(--rhs-text);text-decoration:underline}' + '.rhs-menu .progress-value{color:var(--rhs-muted);font-size:12px;justify-self:end}' + '.rhs-menu .progress-bar{grid-column:1/-1;height:6px;border-radius:var(--rhs-radius);background:#e9f7ec;overflow:hidden}' + '.rhs-menu .progress-fill{height:100%;width:var(--progress);max-width:100%;background:var(--rhs-accent-2);border-radius:var(--rhs-radius)}' + '.rhs-menu .tool-list{list-style:none;margin:0;padding:0;display:grid;gap:8px}' + '.rhs-menu .tool-list li{display:flex;align-items:center;gap:10px;padding:4px 0;border-bottom:1px solid rgba(217,227,251,.6)}' + '.rhs-menu .tool-list li:last-child{border-bottom:none}' + '.rhs-menu .tool-icon{width:20px;height:20px;display:inline-flex;align-items:center;justify-content:center;color:#5a637a}' + '.rhs-menu .tool-icon.bi{font-size:16px}' + '.rhs-menu svg.tool-icon{width:20px;height:20px}' + '.rhs-menu .tool-link{color:var(--rhs-text);text-decoration:none;font-size:13px;font-weight:600}' + '.rhs-menu .tool-link:hover{text-decoration:underline !important;color:var(--rhs-text) !important}' + '.rhs-menu .cert-card{display:grid;gap:6px;justify-items:center;text-align:center}' + '.rhs-menu .cert-card img{width:100%;border-radius:var(--rhs-radius);transition:all 0.3s ease}' + '.rhs-menu .cert-text{font-size:13px;color:var(--rhs-muted);margin:0}' + '.rhs-menu .cert-card.locked img{transition:all 0.3s ease}' + '.rhs-menu .cert-card.unlocked img{filter:none;opacity:1}' + '.rhs-menu .cert-lock-overlay{position:absolute;top:8px;left:12px;font-size:28px;color:#9763f6;z-index:10;pointer-events:none}' + '.rhs-menu .cert-lock-overlay i{font-size:28px}' + '.rhs-menu .cert-lock-overlay .bi-unlock-fill{opacity:0;position:absolute;top:0;left:4px}' + '.rhs-menu .cert-card:hover .cert-lock-overlay .bi-lock-fill{opacity:0}' + '.rhs-menu .cert-card:hover .cert-lock-overlay .bi-unlock-fill{opacity:1}' + '.rhs-menu .cert-card{position:relative}' + '.rhs-menu .cert-card.pulsing img{animation:rhs-pulse 2s infinite;filter:hue-rotate(120deg) saturate(1.2)}' + '@keyframes rhs-pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.08)}}' + '.rhs-menu .cert-button{background:#9763f6;color:white;border:none;border-radius:var(--rhs-radius);padding:8px 16px;font-size:12px;font-weight:600;cursor:pointer;margin-top:8px;transition:all 0.3s ease}' + '.rhs-menu .cert-button:hover{background:#7c4edb;transform:translateY(-1px)}' + '.rhs-menu .cert-link{color:var(--rhs-accent-2);text-decoration:none;font-size:12px;font-weight:600;margin-top:4px}' + '.rhs-menu .cert-link:hover{text-decoration:underline}' + '.rhs-menu .certification-promo{text-align:center;padding:16px}' + '.rhs-menu .cert-title{font-size:18px;font-weight:700;color:var(--rhs-text);margin:0 0 12px 0;text-align:center}' + '.rhs-menu .cert-preview{margin-bottom:16px}' + '.rhs-menu .cert-image-link{display:inline-block;text-decoration:none;transition:transform 0.3s ease}' + '.rhs-menu .cert-image-link:hover{transform:scale(1.02);text-decoration:none}' + '.rhs-menu .cert-image-container{position:relative;display:inline-block;max-width:200px}' + '.rhs-menu .cert-image-container img{width:100%;height:auto;border-radius:var(--rhs-radius);box-shadow:0 4px 12px rgba(0,0,0,0.1);transition:box-shadow 0.3s ease}' + '.rhs-menu .cert-image-link:hover .cert-image-container img{box-shadow:0 6px 16px rgba(0,0,0,0.15)}' + '.rhs-menu .cert-benefits{display:flex;flex-direction:column;gap:8px;margin-bottom:16px;text-align:left}' + '.rhs-menu .benefit-item{display:flex;align-items:center;gap:8px;font-size:14px;color:var(--rhs-text)}' + '.rhs-menu .benefit-icon{width:20px;height:20px;background:#e8d5ff;color:#9763f6;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:bold;flex-shrink:0}' + '.rhs-menu .buy-course-btn{display:block;width:100%;background:linear-gradient(135deg,#9763f6,#7c4edb);color:white;text-decoration:none;border:none;border-radius:var(--rhs-radius);padding:12px 16px;font-size:14px;font-weight:600;text-align:center;transition:all 0.3s ease;box-shadow:0 2px 8px rgba(151,99,246,0.3)}' + '.rhs-menu .buy-course-btn:hover{background:linear-gradient(135deg,#7c4edb,#6a3bc7);transform:translateY(-1px);box-shadow:0 4px 12px rgba(151,99,246,0.4);text-decoration:none;color:white}' + '.rhs-menu .certification-promo.hidden{display:none}' + '.darkpagetheme .rhs-menu{--rhs-bg:#1d2a35;--rhs-card:#2a2a2a;--rhs-border:#38444d;--rhs-text:#fff;--rhs-muted:#aaa;--rhs-pill:#333;--rhs-plus-bg:#6d58d6;--rhs-plus-text:#ede4ff}' + '.darkpagetheme .rhs-menu .sidebar{background:#1d2a35;border-color:#38444d;color:#ddd}' + '.darkpagetheme .rhs-menu .panel{background:#38444d;border-color:#555555;color:#ddd}' + '.darkpagetheme .rhs-menu .stat-card{background:#38444d;border-color:#555555}' + '.darkpagetheme .rhs-menu .plus-banner{background:#6d58d6;color:#ede4ff}' + '.darkpagetheme .rhs-menu .profile{background:#1d2a35}' + '.darkpagetheme .rhs-menu .stats{background:#1d2a35}' + '.darkpagetheme .rhs-menu .stat-tooltip{background:#2a2a2a;color:#fff}' + '.darkpagetheme .rhs-menu .stat-tooltip--left::after{border-left-color:#2a2a2a}' + '.darkpagetheme .rhs-menu .stat-tooltip--right::after{border-right-color:#2a2a2a}' + '@media (max-width:400px){.rhs-menu .sidebar{width:100%}.rhs-menu .activity-grid{grid-template-columns:repeat(2,1fr)}}' + '.rhs-menu{min-height:100vh!important;background:var(--rhs-bg)}' + '.rhs-menu .sidebar{min-height:100%!important;--sticky-top:90px;--profile-h:0px;--stats-h:0px;--rhs-gap:0px;--qt-extra:7px}' + '.rhs-menu .profile{position:sticky;top:var(--sticky-top);z-index:2;background:var(--rhs-card)}' + '.rhs-menu .stats{position:sticky;top:calc(var(--sticky-top) + var(--profile-h) + var(--rhs-gap));z-index:2;background:var(--rhs-card)}' + '.rhs-menu .panel.quick-tools{position:sticky;top:clamp(90px, calc(var(--sticky-top) + var(--profile-h) + var(--rhs-gap) + var(--stats-h) + var(--rhs-gap) + var(--qt-extra)), 280px);z-index:1;margin-bottom:120px}';
+    var style = document.createElement('style');
+    style.id = RightHandSideMenu._styleId;
+    style.type = 'text/css';
+    style.appendChild(document.createTextNode(css));
+    document.head.appendChild(style);
+  };
+
+  // HTML render
+  RightHandSideMenu._render = function (wrapper) {
+    // Get avatar - use cached localStorage value if available (same as topnav)
+    var userAvatarUrl = null;
+    try {
+      var cachedPic = localStorage.getItem('profilePicture');
+      if (cachedPic) {
+        var parts = decodeURIComponent(cachedPic).split('|');
+        if (parts.length > 1) {
+          userAvatarUrl = parts[1]; // Avatar URL is after the session ID
+        }
+      }
+    } catch (e) {}
+    var avatarSrc = userAvatarUrl || '/images/lynx.svg';
+    var avatarAlt = userAvatarUrl ? 'User Avatar' : 'Lynx';
+    var avatarStyle = userAvatarUrl ? 'object-fit:cover;width:85%;height:85%;border-radius:12px;margin:7.5%;' : 'object-fit:contain;width:100%;height:100%;';
+
+    // Get user name from UIC cookie (available immediately)
+    var fullName = '';
+    if (typeof UserSession !== 'undefined' && typeof UserSession.getUicCookie === 'function') {
+      try {
+        var u = UserSession.getUicCookie();
+        if (u && u.fname) {
+          fullName = u.fname;
+          if (u.lname) {
+            fullName += ' ' + u.lname;
+          }
+        }
+      } catch (e) {}
+    }
+    if (!fullName && typeof TopNavBar !== 'undefined' && TopNavBar.cachedUserData) {
+      if (TopNavBar.cachedUserData.fullName) {
+        fullName = TopNavBar.cachedUserData.fullName;
+      } else if (TopNavBar.cachedUserData.firstName) {
+        fullName = TopNavBar.cachedUserData.firstName;
+        if (TopNavBar.cachedUserData.lastName) {
+          fullName += ' ' + TopNavBar.cachedUserData.lastName;
+        }
+      }
+    }
+    var container = document.createElement('aside');
+    container.className = 'sidebar';
+    container.innerHTML = '<header class="profile">' + '<div class="avatar"><img id="rhs-avatar" src="' + avatarSrc + '" alt="' + avatarAlt + '" style="' + avatarStyle + '" /></div>' + '<div class="profile-details">' + '<h1 class="profile-name" id="rhs-name">' + (fullName || '&nbsp;') + '</h1>' + '<div class="profile-meta">' + '<a href="' + MyLearning._dashboardBaseUrl + '/profile" class="profile-link">Open profile</a>' + '<span aria-hidden="true" class="chevron">&#8250;</span>' + '</div>' + '</div>' + '</header>' + '<section class="stats">' + '<article class="stat-card">' + '<div class="stat-tooltip stat-tooltip--left" id="rhs-xp-tooltip">Experience Points: You have 0 XP. Keep learning to earn more!</div>' + '<div class="stat-icon stat-icon--xp">XP</div>' + '<div class="stat-value" id="rhs-xp">0</div>' + '</article>' + '<article class="stat-card">' + '<div class="stat-tooltip stat-tooltip--left" id="rhs-w3points-tooltip">Credits: You have 0 W3Schools Credits to spend on advanced features.</div>' + '<div class="stat-icon stat-icon--streak">W³</div>' + '<div class="stat-value" id="rhs-w3points">0</div>' + '</article>' + '<article class="stat-card">' + '<div class="stat-tooltip stat-tooltip--left" id="rhs-lightning-tooltip">Streaks: You have a 0 day streaks. Click to share it!</div>' + '<div class="stat-icon stat-icon--boost">' + '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2L5 14h6l-1 8L19 10h-6l1-8z" fill="currentColor"/></svg>' + '</div>' + '<div class="stat-value" id="rhs-lightning">0</div>' + '</article>' + '</section>' + '<section class="plus-banner" id="rhs-subscription-banner">✨ You have Plus Access</section>' + '<section class="panel rhs-collapsible">' + '<h2 class="panel-title">Activity Score</h2>' + '<div class="activity-grid">' + '<a href="' + MyLearning._w3sBaseUrl + '" class="activity-card-link"><div class="activity-card"><div class="activity-number" id="rhs-lessons">0</div><div class="activity-label">Lessons</div></div></a>' + '<a href="' + MyLearning._w3sBaseUrl + '/exercises/index.php" class="activity-card-link"><div class="activity-card"><div class="activity-number" id="rhs-exercises">0</div><div class="activity-label">Exercises</div></div></a>' + '<a href="' + MyLearning._w3sBaseUrl + '/quiztest/default.asp" class="activity-card-link"><div class="activity-card"><div class="activity-number" id="rhs-quizzes">0</div><div class="activity-label">Quizzes</div></div></a>' + '<a href="' + MyLearning._dashboardBaseUrl + '/code-challenges" class="activity-card-link"><div class="activity-card"><div class="activity-number" id="rhs-challenges">0</div><div class="activity-label">Challenges</div></div></a>' + '</div>' + '</section>' + '<section class="panel progress-panel rhs-collapsible">' + '<h2 class="panel-title progress-title">Progress <span class="progress-chevron">&#8250;</span></h2>' + '<div id="rhs-progress-list">' + '<div class="progress-item">' + '<span class="progress-label">DSA</span>' + '<span class="progress-value">0%</span>' + '<div class="progress-bar"><div class="progress-fill" style="--progress:0%;"></div></div>' + '</div>' + '<div class="progress-item">' + '<span class="progress-label">Python</span>' + '<span class="progress-value">0%</span>' + '<div class="progress-bar"><div class="progress-fill" style="--progress:0%;"></div></div>' + '</div>' + '<div class="progress-item">' + '<span class="progress-label">HTML</span>' + '<span class="progress-value">0%</span>' + '<div class="progress-bar"><div class="progress-fill" style="--progress:0%;"></div></div>' + '</div>' + '</div>' + '</section>' + '<section class="panel certification-promo" id="rhs-certification-panel">' + '<h2 class="cert-title">Become a Certified Developer</h2>' + '<div class="cert-preview">' + '<a href="https://campus.w3schools.com" class="cert-image-link" target="_blank" rel="noopener noreferrer">' + '<div class="cert-image-container">' + '<img src="/lib/my-learning/cert_template.svg" alt="W3Schools Certificate" id="rhs-cert-image" />' + '</div>' + '</a>' + '</div>' + '<div class="cert-benefits">' + '<div class="benefit-item">' + '<div class="benefit-icon">✓</div>' + '<span>Industry recognized certificate</span>' + '</div>' + '<div class="benefit-item">' + '<div class="benefit-icon">✓</div>' + '<span>Showcase your expertise</span>' + '</div>' + '<div class="benefit-item">' + '<div class="benefit-icon">✓</div>' + '<span>Stand out in the job market</span>' + '</div>' + '</div>' + '<a href="https://campus.w3schools.com" class="buy-course-btn" target="_blank" rel="noopener noreferrer">Get certified now!</a>' + '</section>' + '<section class="panel quick-tools">' + '<h2 class="panel-title">Quick Tools</h2>' + '<ul class="tool-list">' + '<li>' + '<svg class="tool-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg">' + '<circle cx="12" cy="12" r="10"></circle>' + '<polyline points="12 6 12 12 16 14"></polyline>' + '</svg>' + '<a href="' + MyLearning._dashboardBaseUrl + '" class="tool-link" target="_blank" rel="noopener noreferrer">Dashboard</a>' + '</li>' + '<li>' + '<svg class="tool-icon" width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">' + '<path d="M8 11C8 10.8674 8.05268 10.7402 8.14645 10.6464C8.24021 10.5527 8.36739 10.5 8.5 10.5H11.5C11.6326 10.5 11.7598 10.5527 11.8536 10.6464C11.9473 10.7402 12 10.8674 12 11C12 11.1326 11.9473 11.2598 11.8536 11.3536C11.7598 11.4473 11.6326 11.5 11.5 11.5H8.5C8.36739 11.5 8.24021 11.4473 8.14645 11.3536C8.05268 11.2598 8 11.1326 8 11ZM5.854 6.146C5.80751 6.09951 5.75232 6.06264 5.69158 6.03748C5.63084 6.01232 5.56574 5.99937 5.5 5.99937C5.43426 5.99937 5.36916 6.01232 5.30842 6.03748C5.24768 6.06264 5.19249 6.09951 5.146 6.146C5.09951 6.19249 5.06264 6.24768 5.03748 6.30842C5.01232 6.36916 4.99937 6.43426 4.99937 6.5C4.99937 6.56574 5.01232 6.63084 5.03748 6.69158C5.06264 6.75232 5.09951 6.80751 5.146 6.854L6.793 8.5L5.146 10.146C5.09951 10.1925 5.06264 10.2477 5.03748 10.3084C5.01232 10.3692 4.99937 10.4343 4.99937 10.5C4.99937 10.5657 5.01232 10.6308 5.03748 10.6916C5.06264 10.7523 5.09951 10.8075 5.146 10.854C5.23989 10.9479 5.36722 11.0006 5.5 11.0006C5.56574 11.0006 5.63084 10.9877 5.69158 10.9625C5.75232 10.9374 5.80751 10.9005 5.854 10.854L7.854 8.854C7.90056 8.80755 7.93751 8.75238 7.96271 8.69163C7.98792 8.63089 8.00089 8.56577 8.00089 8.5C8.00089 8.43423 7.98792 8.36911 7.96271 8.30837C7.93751 8.24762 7.90056 8.19245 7.854 8.146L5.854 6.146Z" fill="currentColor"></path>' + '<path d="M4 3C3.46957 3 2.96086 3.21071 2.58579 3.58579C2.21071 3.96086 2 4.46957 2 5V15C2 15.5304 2.21071 16.0391 2.58579 16.4142C2.96086 16.7893 3.46957 17 4 17H16C16.5304 17 17.0391 16.7893 17.4142 16.4142C17.7893 16.0391 18 15.5304 18 15V5C18 4.46957 17.7893 3.96086 17.4142 3.58579C17.0391 3.21071 16.5304 3 16 3H4ZM16 4C16.2652 4 16.5196 4.10536 16.7071 4.29289C16.8946 4.48043 17 4.73478 17 5V15C17 15.2652 16.8946 15.5196 16.7071 15.7071C16.5196 15.8946 16.2652 16 16 16H4C3.73478 16 3.48043 15.8946 3.29289 15.7071C3.10536 15.5196 3 15.2652 3 15V5C3 4.73478 3.10536 4.48043 3.29289 4.29289C3.48043 4.10536 3.73478 4 4 4H16Z" fill="currentColor"></path>' + '</svg>' + '<a href="https://spaces.w3schools.com" class="tool-link" target="_blank" rel="noopener noreferrer">Spaces</a>' + '</li>' + '<li>' + '<svg class="tool-icon" width="18" height="18" style="margin: 0 1px;" stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 384 512" xmlns="http://www.w3.org/2000/svg">' + '<path d="M0 48C0 21.5 21.5 0 48 0l0 48 0 393.4 130.1-92.9c8.3-6 19.6-6 27.9 0L336 441.4 336 48 48 48 48 0 336 0c26.5 0 48 21.5 48 48l0 440c0 9-5 17.2-13 21.3s-17.6 3.4-24.9-1.8L192 397.5 37.9 507.5c-7.3 5.2-16.9 5.9-24.9 1.8S0 497 0 488L0 48z"></path>' + '</svg>' + '<a href="' + MyLearning._dashboardBaseUrl + '/bookmarks" class="tool-link" target="_blank" rel="noopener noreferrer">Bookmarks</a>' + '</li>' + '<li>' + '<svg class="tool-icon" stroke="currentColor" fill="none" stroke-width="2" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round" focusable="false" aria-hidden="true" height="1em" width="1em" xmlns="http://www.w3.org/2000/svg">' + '<path d="M9 5h-2a2 2 0 0 0 -2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-12a2 2 0 0 0 -2 -2h-2"></path>' + '<path d="M9 3m0 2a2 2 0 0 1 2 -2h2a2 2 0 0 1 2 2v0a2 2 0 0 1 -2 2h-2a2 2 0 0 1 -2 -2z"></path>' + '<path d="M9 12l.01 0"></path>' + '<path d="M13 12l2 0"></path>' + '<path d="M9 16l.01 0"></path>' + '<path d="M13 16l2 0"></path>' + '</svg>' + '<a href="' + MyLearning._dashboardBaseUrl + '/assessment" class="tool-link" target="_blank" rel="noopener noreferrer">Test your Skills</a>' + '</li>' + '<li>' + '<svg class="tool-icon" viewBox="0 0 25 22" focusable="false" aria-hidden="true">' + '<path fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" d="M6.45871 21C6.21766 21 5.98649 20.9122 5.81604 20.756C5.6456 20.5997 5.54984 20.3878 5.54984 20.1669V15.7201C5.05122 15.9381 4.49861 16.0315 3.94795 15.9908C3.4817 15.9594 3.02872 15.8342 2.62126 15.6241C2.21381 15.4139 1.86189 15.1241 1.59056 14.7751C1.31923 14.4261 1.13515 14.0266 1.05142 13.6049C0.967701 13.1833 0.986391 12.75 1.10616 12.3357C1.22594 11.9215 1.44385 11.5365 1.74439 11.2082C2.04494 10.88 2.42072 10.6165 2.845 10.4365C3.26928 10.2565 3.73163 10.1644 4.19914 10.1669C4.66664 10.1693 5.12782 10.2662 5.54984 10.4506V6.00377C5.54984 5.78281 5.6456 5.5709 5.81604 5.41466C5.98649 5.25842 6.21766 5.17065 6.45871 5.17065H11.7642C11.5264 4.71358 11.4245 4.20703 11.4689 3.70226C11.5031 3.27487 11.6397 2.85964 11.869 2.48614C12.0982 2.11265 12.4144 1.79006 12.7952 1.54134C13.1759 1.29262 13.6117 1.12388 14.0717 1.04714C14.5317 0.970393 15.0044 0.987525 15.4563 1.09732C15.9082 1.20711 16.3282 1.40686 16.6863 1.68235C17.0444 1.95785 17.3319 2.30231 17.5282 2.69123C17.7246 3.08015 17.825 3.50397 17.8224 3.93251C17.8197 4.36106 17.714 4.7838 17.5129 5.17065H22.8184C23.0594 5.17065 23.2906 5.25842 23.4611 5.41466C23.6315 5.5709 23.7273 5.78281 23.7273 6.00377V10.4506C23.2287 10.2325 22.676 10.1391 22.1254 10.1798C21.6591 10.2112 21.2062 10.3364 20.7987 10.5466C20.3912 10.7567 20.0393 11.0466 19.768 11.3956C19.4967 11.7446 19.3126 12.1441 19.2289 12.5657C19.1451 12.9873 19.1638 13.4207 19.2836 13.8349C19.4034 14.2492 19.6213 14.6341 19.9218 14.9624C20.2224 15.2907 20.5982 15.5542 21.0224 15.7342C21.4467 15.9142 21.9091 16.0062 22.3766 16.0038C22.8441 16.0013 23.3053 15.9045 23.7273 15.7201V20.1669C23.7273 20.3878 23.6315 20.5997 23.4611 20.756C23.2906 20.9122 23.0594 21 22.8184 21H6.45871Z"></path>' + '</svg>' + '<a href="' + MyLearning._dashboardBaseUrl + '/code-challenges" class="tool-link" target="_blank" rel="noopener noreferrer">Challenges</a>' + '</li>' + '<li>' + '<svg class="tool-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg">' + '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>' + '<polyline points="14,2 14,8 20,8"></polyline>' + '<line x1="16" y1="13" x2="8" y2="13"></line>' + '<line x1="16" y1="17" x2="8" y2="17"></line>' + '<polyline points="10,9 9,9 8,9"></polyline>' + '</svg>' + '<a href="' + MyLearning._w3sBaseUrl + '/tryit/default.asp" class="tool-link" target="_blank" rel="noopener noreferrer">Tryit Editor</a>' + '</li>' + '<li>' + '<i class="tool-icon bi bi-palette" aria-hidden="true"></i>' + '<a href="' + MyLearning._w3sBaseUrl + '/colors/colors_picker.asp" class="tool-link" target="_blank" rel="noopener noreferrer">Color Picker</a>' + '</li>' + '</ul>' + '</section>';
+    wrapper.appendChild(container);
+    RightHandSideMenu._rendered = true;
+
+    // Update sticky offsets based on measured heights
+    RightHandSideMenu._updateStickyVars();
+
+    // Add click handler for progress expand/collapse
+    RightHandSideMenu._attachProgressExpandHandler();
+
+    // Update name immediately if available
+    RightHandSideMenu._updateNameImmediately();
+
+    // Trigger early user data fetch if not already started
+    if (typeof TopNavBar !== 'undefined' && !TopNavBar.cachedUserData && !TopNavBar._userDataFetchInProgress) {
+      TopNavBar.prefetchUserData();
+    }
+    RightHandSideMenu._updateFromKnownSources();
+    RightHandSideMenu._updateSubscriptionBanner();
+    RightHandSideMenu._updateCertificateUrl();
+  };
+
+  // Measure and set CSS vars for sticky layout
+  RightHandSideMenu._updateStickyVars = function () {
+    try {
+      var root = document.querySelector('.rhs-menu .sidebar');
+      if (!root) return;
+      var profile = root.querySelector('.profile');
+      var stats = root.querySelector('.stats');
+      var profileH = profile ? profile.getBoundingClientRect().height : 0;
+      var statsH = stats ? stats.getBoundingClientRect().height : 0;
+      root.style.setProperty('--profile-h', profileH + 'px');
+      root.style.setProperty('--stats-h', statsH + 'px');
+    } catch (e) {}
+  };
+
+  // Load API data lazily
+  RightHandSideMenu._loadAPIData = function () {
+    if (RightHandSideMenu._apiDataLoaded) {
+      return;
+    }
+    if (typeof SharedAPI === 'undefined') {
+      return;
+    }
+    RightHandSideMenu._apiDataLoaded = true;
+    SharedAPI.lazyFetchAll(function (data) {
+      RightHandSideMenu._updateWithAPIData(data);
+    });
+  };
+
+  // Update subscription banner text
+  RightHandSideMenu._updateSubscriptionBanner = function () {
+    try {
+      var root = document.querySelector('.rhs-menu .sidebar');
+      if (!root) return;
+      var bannerElm = root.querySelector('#rhs-subscription-banner');
+      if (!bannerElm) return;
+      var subscriptionPlan = 'free';
+      var fullAccessPlan = false;
+
+      // Get subscription plan from UIC cookie (same logic as topnav)
+      if (typeof UserSession !== 'undefined' && typeof UserSession.getUicCookie === 'function') {
+        try {
+          var uicCookieData = UserSession.getUicCookie();
+          if (uicCookieData) {
+            subscriptionPlan = uicCookieData.plan || 'free';
+            fullAccessPlan = uicCookieData.fa === true;
+          }
+        } catch (e) {}
+      }
+
+      // Update banner text (same logic as topnav)
+      var bannerText;
+      if (fullAccessPlan) {
+        bannerText = '✨ You have Full Access';
+      } else if (subscriptionPlan === 'free') {
+        bannerText = '✨ Upgrade to Plus';
+      } else {
+        // Handle any paid plan dynamically
+        bannerText = '✨ You have ' + subscriptionPlan.toUpperCase() + ' Access';
+      }
+      bannerElm.textContent = bannerText;
+    } catch (e) {
+      console.error('Error updating subscription banner:', e);
+    }
+  };
+
+  // Get current tutorial progress percentage
+  RightHandSideMenu._getCurrentProgress = function () {
+    try {
+      var progressPercentage = 0;
+
+      // Try TopNavBar cached progress first (most reliable)
+      if (typeof TopNavBar !== 'undefined' && TopNavBar.cachedUserData && TopNavBar.cachedUserData.currentProgress) {
+        if (typeof TopNavBar.cachedUserData.currentProgress.progress === 'number') {
+          progressPercentage = TopNavBar.cachedUserData.currentProgress.progress;
+        }
+      }
+      // Try MyLearning progress data
+      else if (typeof MyLearning !== 'undefined' && typeof MyLearning.pages_read_count === 'number' && typeof MyLearning.total_pages_count === 'number' && MyLearning.total_pages_count > 0) {
+        progressPercentage = Math.round(MyLearning.pages_read_count / MyLearning.total_pages_count * 100);
+      }
+      return Math.max(0, Math.min(100, progressPercentage));
+    } catch (e) {
+      console.error('Error getting current progress:', e);
+      return 0;
+    }
+  };
+
+  // Paths where the right-hand side menu should be hidden
+  RightHandSideMenu._hiddenPaths = ['/bootstrap/bootstrap_ver.asp'];
+
+  // TopicMap with campus URLs (same as next-btn-modal.modern.js)
+  RightHandSideMenu._topicMap = {
+    accessibility: {
+      name: 'Accessibility',
+      campusUrl: 'https://campus.w3schools.com/products/accessibility-course',
+      iconPath: '/lib/my-learning/html/ads/icons/accessibility.png'
+    },
+    angular: {
+      name: 'Angular',
+      campusUrl: 'https://campus.w3schools.com/products/angularjs-certificate',
+      iconPath: '/lib/my-learning/html/ads/icons/angular.png'
+    },
+    angularjs: {
+      name: 'AngularJS',
+      campusUrl: 'https://campus.w3schools.com/products/angularjs-certificate',
+      iconPath: '/lib/my-learning/html/ads/icons/angular.png'
+    },
+    asp: {
+      name: 'ASP',
+      campusUrl: 'https://campus.w3schools.com/products/asp-certificate',
+      iconPath: '/lib/my-learning/html/ads/icons/asp.png'
+    },
+    bash: {
+      name: 'Bash',
+      campusUrl: 'https://campus.w3schools.com/products/bash-certification-exam',
+      iconPath: '/lib/my-learning/html/ads/icons/bash.png'
+    },
+    bootstrap: {
+      name: 'Bootstrap 3',
+      campusUrl: 'https://campus.w3schools.com/products/bootstrap-course',
+      iconPath: '/lib/my-learning/html/ads/icons/bootstrap.png'
+    },
+    bootstrap4: {
+      name: 'Bootstrap 4',
+      campusUrl: 'https://campus.w3schools.com/products/bootstrap-4-course',
+      iconPath: '/lib/my-learning/html/ads/icons/bootstrap.png'
+    },
+    bootstrap5: {
+      name: 'Bootstrap 5',
+      campusUrl: 'https://campus.w3schools.com/products/learn-bootstrap-5',
+      iconPath: '/lib/my-learning/html/ads/icons/bootstrap.png'
+    },
+    c: {
+      name: 'C',
+      campusUrl: 'https://campus.w3schools.com/products/learn-c',
+      iconPath: '/lib/my-learning/html/ads/icons/c.png'
+    },
+    cpp: {
+      name: 'C++',
+      campusUrl: 'https://campus.w3schools.com/products/c-course',
+      iconPath: '/lib/my-learning/html/ads/icons/cpp.png'
+    },
+    cs: {
+      name: 'C#',
+      campusUrl: 'https://campus.w3schools.com/products/c-course',
+      iconPath: '/lib/my-learning/html/ads/icons/csharp.png'
+    },
+    css: {
+      name: 'CSS',
+      campusUrl: 'https://campus.w3schools.com/products/css-course',
+      iconPath: '/lib/my-learning/html/ads/icons/css.png'
+    },
+    cybersecurity: {
+      name: 'Cybersecurity',
+      campusUrl: 'https://campus.w3schools.com/products/cyber-security-course',
+      iconPath: '/lib/my-learning/html/ads/icons/cybersecurity.png'
+    },
+    datascience: {
+      name: 'Data Science',
+      campusUrl: 'https://campus.w3schools.com/products/data-science-certificate',
+      iconPath: '/lib/my-learning/html/ads/icons/datascience.png'
+    },
+    django: {
+      name: 'Django',
+      campusUrl: 'https://campus.w3schools.com/products/learn-django',
+      iconPath: '/lib/my-learning/html/ads/icons/django.png'
+    },
+    dsa: {
+      name: 'DSA',
+      campusUrl: 'https://campus.w3schools.com/products/dsa-certification-exam',
+      iconPath: '/lib/my-learning/html/ads/icons/dsa.png'
+    },
+    excel: {
+      name: 'Excel',
+      campusUrl: 'https://campus.w3schools.com/products/learn-excel',
+      iconPath: '/lib/my-learning/html/ads/icons/excel.png'
+    },
+    git: {
+      name: 'Git',
+      campusUrl: 'https://campus.w3schools.com/products/learn-git',
+      iconPath: '/lib/my-learning/html/ads/icons/git.png'
+    },
+    go: {
+      name: 'Go',
+      campusUrl: 'https://campus.w3schools.com/products/go-certificate',
+      iconPath: '/lib/my-learning/html/ads/icons/go.png'
+    },
+    html: {
+      name: 'HTML',
+      campusUrl: 'https://campus.w3schools.com/products/html-course',
+      iconPath: '/lib/my-learning/html/ads/icons/html.png'
+    },
+    java: {
+      name: 'Java',
+      campusUrl: 'https://campus.w3schools.com/products/java-course',
+      iconPath: '/lib/my-learning/html/ads/icons/java.png'
+    },
+    jquery: {
+      name: 'jQuery',
+      campusUrl: 'https://campus.w3schools.com/products/jquery-course',
+      iconPath: '/lib/my-learning/html/ads/icons/jquery.png'
+    },
+    js: {
+      name: 'JavaScript',
+      campusUrl: 'https://campus.w3schools.com/products/javascript-course',
+      iconPath: '/lib/my-learning/html/ads/icons/javascript.png'
+    },
+    kotlin: {
+      name: 'Kotlin',
+      campusUrl: 'https://campus.w3schools.com/products/learn-kotlin',
+      iconPath: '/lib/my-learning/html/ads/icons/kotlin.png'
+    },
+    mongodb: {
+      name: 'MongoDB',
+      campusUrl: 'https://campus.w3schools.com/products/learn-mongodb',
+      iconPath: '/lib/my-learning/html/ads/icons/mongodb.png'
+    },
+    mysql: {
+      name: 'MySQL',
+      campusUrl: 'https://campus.w3schools.com/products/learn-mysql-1',
+      iconPath: '/lib/my-learning/html/ads/icons/mysql.png'
+    },
+    nodejs: {
+      name: 'Node.js',
+      campusUrl: 'https://campus.w3schools.com/products/learn-node-js',
+      iconPath: '/lib/my-learning/html/ads/icons/nodejs.png'
+    },
+    numpy: {
+      name: 'NumPy',
+      campusUrl: 'https://campus.w3schools.com/products/numpy-course',
+      iconPath: '/lib/my-learning/html/ads/icons/numpy.png'
+    },
+    pandas: {
+      name: 'Pandas',
+      campusUrl: 'https://campus.w3schools.com/products/pandas-course',
+      iconPath: '/lib/my-learning/html/ads/icons/pandas.png'
+    },
+    php: {
+      name: 'PHP',
+      campusUrl: 'https://campus.w3schools.com/products/php-course',
+      iconPath: '/lib/my-learning/html/ads/icons/php.png'
+    },
+    postgresql: {
+      name: 'PostgreSQL',
+      campusUrl: 'https://campus.w3schools.com/products/learn-postgresql',
+      iconPath: '/lib/my-learning/html/ads/icons/postgres.png'
+    },
+    programming: {
+      name: 'Programming',
+      campusUrl: '',
+      iconPath: '/lib/my-learning/html/ads/icons/programming.png'
+    },
+    python: {
+      name: 'Python',
+      campusUrl: 'https://campus.w3schools.com/products/python-course',
+      iconPath: '/lib/my-learning/html/ads/icons/python.png'
+    },
+    r: {
+      name: 'R',
+      campusUrl: 'https://campus.w3schools.com/products/r-course',
+      iconPath: '/lib/my-learning/html/ads/icons/r.png'
+    },
+    rust: {
+      name: 'Rust',
+      campusUrl: 'https://campus.w3schools.com/products/rust-course',
+      iconPath: '/lib/my-learning/html/ads/icons/rust.png'
+    },
+    react: {
+      name: 'React',
+      campusUrl: 'https://campus.w3schools.com/products/react-js-course',
+      iconPath: '/lib/my-learning/html/ads/icons/react.png'
+    },
+    sass: {
+      name: 'Sass',
+      campusUrl: 'https://campus.w3schools.com/products/sass-certificate',
+      iconPath: '/lib/my-learning/html/ads/icons/sass.png'
+    },
+    scipy: {
+      name: 'SciPy',
+      campusUrl: 'https://campus.w3schools.com/products/learn-scipy',
+      iconPath: '/lib/my-learning/html/ads/icons/scipy.png'
+    },
+    sql: {
+      name: 'SQL',
+      campusUrl: 'https://campus.w3schools.com/products/sql-course',
+      iconPath: '/lib/my-learning/html/ads/icons/sql.png'
+    },
+    statistics: {
+      name: 'Statistics',
+      campusUrl: 'https://campus.w3schools.com/products/statistics-certificate',
+      iconPath: '/lib/my-learning/html/ads/icons/statistics.png'
+    },
+    swift: {
+      name: 'Swift',
+      campusUrl: 'https://order.w3schools.com/',
+      iconPath: '/lib/my-learning/html/ads/icons/swift.png'
+    },
+    typescript: {
+      name: 'TypeScript',
+      campusUrl: 'https://campus.w3schools.com/products/learn-typescript',
+      iconPath: '/lib/my-learning/html/ads/icons/typescript.png'
+    },
+    vue: {
+      name: 'Vue',
+      campusUrl: 'https://campus.w3schools.com/products/learn-vue-js',
+      iconPath: '/lib/my-learning/html/ads/icons/vue.png'
+    },
+    w3css: {
+      name: 'W3.CSS',
+      campusUrl: 'https://order.w3schools.com/',
+      iconPath: '/lib/my-learning/html/ads/icons/w3css.png'
+    },
+    xml: {
+      name: 'XML',
+      campusUrl: 'https://campus.w3schools.com/products/xml-course',
+      iconPath: '/lib/my-learning/html/ads/icons/xml.png'
+    }
+  };
+
+  // Get current topic ID from URL
+  RightHandSideMenu._getCurrentTopicId = function () {
+    try {
+      var path = window.location.pathname;
+      var pathParts = path.split('/').filter(function (part) {
+        return part.length > 0;
+      });
+      if (pathParts.length > 0) {
+        var firstPart = pathParts[0].toLowerCase();
+        // Handle special cases
+        if (firstPart === 'javascript') firstPart = 'js';
+        if (firstPart === 'csharp') firstPart = 'cs';
+        return firstPart;
+      }
+    } catch (e) {}
+    return null;
+  };
+
+  // Get current topic ID and data
+  RightHandSideMenu._getCurrentTopic = function () {
+    try {
+      var topicId = null;
+      var topicName = null;
+
+      // Try to get current topic from TopNavBar (only available on lesson pages)
+      if (typeof TopNavBar !== 'undefined' && TopNavBar.cachedUserData && TopNavBar.cachedUserData.currentProgress) {
+        topicName = TopNavBar.cachedUserData.currentProgress.topicName;
+      }
+
+      // Try to get topicId from subjectFolder if available
+      if (typeof subjectFolder !== 'undefined' && subjectFolder) {
+        var cleanSubject = subjectFolder.replace(/\//g, '').toLowerCase();
+        if (cleanSubject.indexOf('_') > -1) {
+          cleanSubject = cleanSubject.split('_')[0];
+        }
+        topicId = cleanSubject;
+      }
+
+      // Fallback: try to extract topic from URL path
+      if (!topicId) {
+        var path = window.location.pathname;
+        var pathParts = path.split('/').filter(function (part) {
+          return part.length > 0;
+        });
+        if (pathParts.length > 0) {
+          var firstPart = pathParts[0].toLowerCase();
+          // Handle special cases
+          if (firstPart === 'javascript') firstPart = 'js';
+          if (firstPart === 'csharp') firstPart = 'cs';
+          topicId = firstPart;
+        }
+      }
+
+      // Get topic data from local topicMap
+      var topicData = RightHandSideMenu._topicMap[topicId];
+      if (topicData) {
+        return {
+          id: topicId,
+          name: topicData.name,
+          campusUrl: topicData.campusUrl,
+          iconPath: topicData.iconPath
+        };
+      }
+
+      // Fallback to generic data
+      return {
+        id: 'programming',
+        name: topicName || 'Programming',
+        campusUrl: 'https://order.w3schools.com/',
+        iconPath: '/lib/my-learning/html/ads/w3schools.svg'
+      };
+    } catch (e) {
+      console.error('Error getting current topic:', e);
+      return {
+        id: 'programming',
+        name: 'Programming',
+        campusUrl: 'https://order.w3schools.com/',
+        iconPath: '/lib/my-learning/html/ads/w3schools.svg'
+      };
+    }
+  };
+
+  // Check if user has full access
+  RightHandSideMenu._userHasFullAccess = function () {
+    try {
+      if (typeof UserSession !== 'undefined' && typeof UserSession.getUicCookie === 'function') {
+        var uicCookieData = UserSession.getUicCookie();
+        if (uicCookieData && uicCookieData.fa === true) {
+          return true;
+        }
+      }
+    } catch (e) {}
+    return false;
+  };
+
+  // Update tooltip text with current values
+  RightHandSideMenu._updateTooltips = function () {
+    try {
+      var root = document.querySelector('.rhs-menu .sidebar');
+      if (!root) return;
+
+      // Update XP tooltip
+      var xpElm = root.querySelector('#rhs-xp');
+      var xpTooltip = root.querySelector('#rhs-xp-tooltip');
+      if (xpElm && xpTooltip) {
+        var xpValue = xpElm.textContent || '0';
+        xpTooltip.textContent = 'Experience Points: You have ' + xpValue + ' XP. Keep learning to earn more!';
+      }
+
+      // Update W3Points tooltip
+      var w3Elm = root.querySelector('#rhs-w3points');
+      var w3Tooltip = root.querySelector('#rhs-w3points-tooltip');
+      if (w3Elm && w3Tooltip) {
+        var w3Value = w3Elm.textContent || '0';
+        w3Tooltip.textContent = 'Credits: You have ' + w3Value + ' W3Schools Credits to spend on advanced features.';
+      }
+
+      // Update Streaks tooltip
+      var lightningElm = root.querySelector('#rhs-lightning');
+      var lightningTooltip = root.querySelector('#rhs-lightning-tooltip');
+      if (lightningElm && lightningTooltip) {
+        var lightningValue = lightningElm.textContent || '0';
+        lightningTooltip.textContent = 'Streaks: You have a ' + lightningValue + ' day streaks.';
+      }
+    } catch (e) {
+      console.error('Error updating tooltips:', e);
+    }
+  };
+
+  // Update certificate section with topic-specific URL
+  RightHandSideMenu._updateCertificateUrl = function () {
+    try {
+      var currentTopic = RightHandSideMenu._getCurrentTopic();
+      var certPanel = document.getElementById('rhs-certification-panel');
+      if (!certPanel) return;
+
+      // Hide certificate section by default
+      certPanel.classList.add('hidden');
+
+      // Only show certificate section if user is NOT full access
+      if (!RightHandSideMenu._userHasFullAccess()) {
+        // Hide certificate section if campusUrl is empty
+        if (!currentTopic.campusUrl || currentTopic.campusUrl === '') {
+          return;
+        }
+
+        // Show certificate section
+        certPanel.classList.remove('hidden');
+
+        // Update Buy Course button
+        var buyButton = document.querySelector('.rhs-menu .buy-course-btn');
+        if (buyButton) {
+          buyButton.href = currentTopic.campusUrl;
+        }
+
+        // Update certificate image link
+        var certImageLink = document.querySelector('.rhs-menu .cert-image-link');
+        if (certImageLink) {
+          certImageLink.href = currentTopic.campusUrl;
+        }
+      }
+    } catch (e) {
+      console.error('Error updating certificate URL:', e);
+    }
+  };
+
+  // Update UI with API data
+  RightHandSideMenu._updateWithAPIData = function (data) {
+    try {
+      var root = document.querySelector('.rhs-menu .sidebar');
+      if (!root) return;
+
+      // Update XP
+      if (data.xp !== null) {
+        var xpElm = root.querySelector('#rhs-xp');
+        if (xpElm) xpElm.textContent = data.xp;
+      }
+
+      // Update streaks in the lightning section
+      if (data.streaks !== null) {
+        var lightningElm = root.querySelector('#rhs-lightning');
+        if (lightningElm) lightningElm.textContent = data.streaks;
+      }
+
+      // Update W3Points (tokens)
+      if (data.tokens !== null) {
+        var w3pointsElm = root.querySelector('#rhs-w3points');
+        if (w3pointsElm) w3pointsElm.textContent = SharedAPI.formatTokens(data.tokens);
+      }
+
+      // Update tooltips with new values
+      RightHandSideMenu._updateTooltips();
+
+      // Update activity data
+      if (data.activity !== null) {
+        var lessonsElm = root.querySelector('#rhs-lessons');
+        var exercisesElm = root.querySelector('#rhs-exercises');
+        var quizzesElm = root.querySelector('#rhs-quizzes');
+        var challengesElm = root.querySelector('#rhs-challenges');
+        if (lessonsElm) lessonsElm.textContent = data.activity.lessonsCount || 0;
+        if (exercisesElm) exercisesElm.textContent = data.activity.exercisesCount || 0;
+        if (quizzesElm) quizzesElm.textContent = data.activity.quizCount || 0;
+        if (challengesElm) challengesElm.textContent = data.challenges || 0;
+
+        // Update progress bars with topic data
+        RightHandSideMenu._updateProgressBars(data.activity.topics);
+      }
+      // Recompute sticky offsets after content changes
+      RightHandSideMenu._updateStickyVars();
+    } catch (e) {
+      console.error('Error updating with API data:', e);
+    }
+  };
+
+  // Update progress bars with topic data
+  RightHandSideMenu._updateProgressBars = function (topics) {
+    if (!topics) return;
+    try {
+      var root = document.querySelector('.rhs-menu .sidebar');
+      if (!root) return;
+
+      // Sort topics: current topic first, then by most recent interaction
+      var currentTopicUuid = typeof MyLearning !== 'undefined' ? MyLearning.topicId : null;
+
+      // Check if current topic exists in the list
+      var currentTopicExists = currentTopicUuid && topics[currentTopicUuid];
+
+      // If current topic doesn't exist but we have a UUID, inject it with 0% progress
+      if (currentTopicUuid && !currentTopicExists) {
+        var currentTopic = RightHandSideMenu._getCurrentTopic();
+        if (currentTopic && currentTopic.name) {
+          topics[currentTopicUuid] = {
+            topicName: currentTopic.name,
+            lessonUuid: null,
+            lessonsScore: 0,
+            lessonsTotal: 1,
+            lessonInteractionUts: Date.now() / 1000,
+            lessonName: null,
+            lessonRelPath: null
+          };
+        }
+      }
+      var sortedTopics = Object.entries(topics).sort(function (_ref, _ref2) {
+        var _ref3 = _slicedToArray(_ref, 2),
+          uuidA = _ref3[0],
+          a = _ref3[1];
+        var _ref4 = _slicedToArray(_ref2, 2),
+          uuidB = _ref4[0],
+          b = _ref4[1];
+        // Current topic UUID always comes first
+        if (currentTopicUuid) {
+          if (uuidA === currentTopicUuid) return -1;
+          if (uuidB === currentTopicUuid) return 1;
+        }
+
+        // Then sort by most recent interaction
+        return (b.lessonInteractionUts || 0) - (a.lessonInteractionUts || 0);
+      });
+
+      // Store all topics for expand functionality
+      RightHandSideMenu._allTopics = sortedTopics;
+
+      // Get current display mode (collapsed shows top 3, expanded shows all)
+      var progressPanel = root.querySelector('.progress-panel');
+      var isExpanded = progressPanel && progressPanel.classList.contains('expanded');
+      var topicsToShow = isExpanded ? sortedTopics : sortedTopics.slice(0, 3);
+
+      // Clear existing progress items
+      var progressList = root.querySelector('#rhs-progress-list');
+      if (progressList) {
+        progressList.innerHTML = '';
+      }
+
+      // Create progress items for topics to show
+      topicsToShow.forEach(function (_ref5) {
+        var _ref6 = _slicedToArray(_ref5, 2),
+          topicId = _ref6[0],
+          topic = _ref6[1];
+        var progressItem = document.createElement('div');
+        progressItem.className = 'progress-item';
+        var percentage = Math.round(topic.lessonsScore / topic.lessonsTotal * 100);
+
+        // Get base URL from MyLearning
+        var baseUrl = typeof MyLearning !== 'undefined' && MyLearning._w3sBaseUrl ? MyLearning._w3sBaseUrl : 'https://www.w3schools.com';
+
+        // Use lessonRelPath from topic (always present in API response)
+        var topicUrl = topic.lessonRelPath ? baseUrl + '/' + topic.lessonRelPath : null;
+        if (topicUrl) {
+          progressItem.innerHTML = '<a href="' + topicUrl + '" class="progress-label progress-link" target="_top">' + topic.topicName + '</a>' + '<span class="progress-value">' + percentage + '%</span>' + '<div class="progress-bar"><div class="progress-fill" style="--progress:' + percentage + '%;"></div></div>';
+        } else {
+          // No link available, just show the label
+          progressItem.innerHTML = '<span class="progress-label">' + topic.topicName + '</span>' + '<span class="progress-value">' + percentage + '%</span>' + '<div class="progress-bar"><div class="progress-fill" style="--progress:' + percentage + '%;"></div></div>';
+        }
+        if (progressList) {
+          progressList.appendChild(progressItem);
+        }
+      });
+
+      // Trigger animation by adding loaded class to progress list
+      if (progressList && !progressList.classList.contains('loaded')) {
+        progressList.classList.add('loaded');
+      }
+    } catch (e) {
+      console.error('Error updating progress bars:', e);
+    }
+  };
+
+  // Attach progress expand/collapse handler
+  RightHandSideMenu._attachProgressExpandHandler = function () {
+    var progressTitle = document.querySelector('.rhs-menu .progress-title');
+    if (progressTitle) {
+      progressTitle.addEventListener('click', function () {
+        var progressPanel = document.querySelector('.rhs-menu .progress-panel');
+        var chevron = document.querySelector('.rhs-menu .progress-chevron');
+        if (progressPanel && chevron) {
+          var isExpanded = progressPanel.classList.contains('expanded');
+          if (isExpanded) {
+            // Collapse
+            progressPanel.classList.remove('expanded');
+            progressPanel.classList.add('collapsed');
+            chevron.classList.remove('expanded');
+          } else {
+            // Expand
+            progressPanel.classList.remove('collapsed');
+            progressPanel.classList.add('expanded');
+            chevron.classList.add('expanded');
+          }
+
+          // Refresh progress bars with new display mode
+          if (RightHandSideMenu._allTopics) {
+            RightHandSideMenu._updateProgressBars(RightHandSideMenu._allTopics.reduce(function (acc, _ref7) {
+              var _ref8 = _slicedToArray(_ref7, 2),
+                topicId = _ref8[0],
+                topic = _ref8[1];
+              acc[topicId] = topic;
+              return acc;
+            }, {}));
+          }
+        }
+      });
+    }
+  };
+
+  // Update name immediately after render
+  RightHandSideMenu._updateNameImmediately = function () {
+    try {
+      var root = document.querySelector('.rhs-menu .sidebar');
+      if (!root) return;
+      var nameElm = root.querySelector('#rhs-name');
+      if (!nameElm) return;
+      var fullName = '';
+
+      // Try UIC cookie first (most reliable source)
+      if (typeof UserSession !== 'undefined' && typeof UserSession.getUicCookie === 'function') {
+        try {
+          var u = UserSession.getUicCookie();
+          if (u && u.fname) {
+            fullName = u.fname;
+            if (u.lname) {
+              fullName += ' ' + u.lname;
+            }
+          }
+        } catch (e) {}
+      }
+
+      // Fallback to TopNavBar cached data
+      if (!fullName && typeof TopNavBar !== 'undefined' && TopNavBar.cachedUserData) {
+        if (TopNavBar.cachedUserData.fullName) {
+          fullName = TopNavBar.cachedUserData.fullName;
+        } else if (TopNavBar.cachedUserData.firstName) {
+          fullName = TopNavBar.cachedUserData.firstName;
+          if (TopNavBar.cachedUserData.lastName) {
+            fullName += ' ' + TopNavBar.cachedUserData.lastName;
+          }
+        }
+      }
+
+      // Update name if found
+      if (fullName) {
+        nameElm.textContent = fullName;
+      }
+    } catch (e) {}
+  };
+
+  // Data update
+  RightHandSideMenu._updateFromKnownSources = function () {
+    try {
+      var root = document.querySelector('.rhs-menu .sidebar');
+      if (!root) return;
+
+      // Avatar - update if changed
+      var avatarImg = root.querySelector('#rhs-avatar');
+      if (avatarImg) {
+        var userAvatarUrl = RightHandSideMenu._getUserProfilePicture();
+        var avatarSrc = userAvatarUrl || '/images/lynx.svg';
+        var avatarStyle = userAvatarUrl ? 'object-fit:cover;width:85%;height:85%;border-radius:12px;margin:7.5%;' : 'object-fit:contain;width:100%;height:100%;';
+        if (avatarImg.src !== avatarSrc) {
+          avatarImg.src = avatarSrc;
+          avatarImg.alt = userAvatarUrl ? 'User Avatar' : 'Lynx';
+          avatarImg.style.cssText = avatarStyle;
+        }
+      }
+
+      // Name - prioritize UIC cookie like topnav does
+      var nameElm = root.querySelector('#rhs-name');
+      var fullName = '';
+
+      // Try UIC cookie first (most reliable source)
+      if (typeof UserSession !== 'undefined' && typeof UserSession.getUicCookie === 'function') {
+        try {
+          var u = UserSession.getUicCookie();
+          if (u && u.fname) {
+            fullName = u.fname;
+            if (u.lname) {
+              fullName += ' ' + u.lname;
+            }
+          }
+        } catch (e) {}
+      }
+
+      // Fallback to TopNavBar cached data
+      if (!fullName && typeof TopNavBar !== 'undefined' && TopNavBar.cachedUserData) {
+        if (TopNavBar.cachedUserData.fullName) {
+          fullName = TopNavBar.cachedUserData.fullName;
+        } else if (TopNavBar.cachedUserData.firstName) {
+          fullName = TopNavBar.cachedUserData.firstName;
+          if (TopNavBar.cachedUserData.lastName) {
+            fullName += ' ' + TopNavBar.cachedUserData.lastName;
+          }
+        }
+      }
+
+      // Update name if found (always keep visible)
+      if (nameElm && fullName) {
+        nameElm.textContent = fullName;
+      }
+
+      // Stats
+      var xpVal, w3Val, liVal;
+      if (typeof TopNavBar !== 'undefined' && TopNavBar.mylUserLiteState) {
+        if (typeof TopNavBar.mylUserLiteState.xp === 'number') xpVal = TopNavBar.mylUserLiteState.xp;
+        if (typeof TopNavBar.mylUserLiteState.w3points !== 'undefined') w3Val = TopNavBar.mylUserLiteState.w3points;
+        if (typeof TopNavBar.mylUserLiteState.lightning !== 'undefined') liVal = TopNavBar.mylUserLiteState.lightning;
+      }
+      if (xpVal == null && typeof Pathfinder !== 'undefined' && typeof Pathfinder._userXp === 'number') {
+        xpVal = Pathfinder._userXp;
+      }
+      var xpElm = root.querySelector('#rhs-xp');
+      var w3Elm = root.querySelector('#rhs-w3points');
+      var liElm = root.querySelector('#rhs-lightning');
+      if (xpElm && xpVal) xpElm.textContent = xpVal;
+      if (w3Elm && w3Val) w3Elm.textContent = w3Val;
+      if (liElm && liVal) liElm.textContent = liVal;
+
+      // Update tooltips with new values
+      RightHandSideMenu._updateTooltips();
+
+      // Activity - only update if API data hasn't been loaded yet
+      if (!RightHandSideMenu._apiDataLoaded) {
+        var activity = {
+          lessons: 0,
+          exercises: 0,
+          quizzes: 0,
+          challenges: 0
+        };
+        if (typeof TopNavBar !== 'undefined' && TopNavBar.mylUserLiteState && TopNavBar.mylUserLiteState.activity) {
+          var a = TopNavBar.mylUserLiteState.activity;
+          if (typeof a.lessons === 'number') activity.lessons = a.lessons;
+          if (typeof a.exercises === 'number') activity.exercises = a.exercises;
+          if (typeof a.quizzes === 'number') activity.quizzes = a.quizzes;
+          if (typeof a.challenges === 'number') activity.challenges = a.challenges;
+        }
+        var lessonsElm = root.querySelector('#rhs-lessons');
+        var exercisesElm = root.querySelector('#rhs-exercises');
+        var quizzesElm = root.querySelector('#rhs-quizzes');
+        var challengesElm = root.querySelector('#rhs-challenges');
+        if (lessonsElm) lessonsElm.textContent = activity.lessons;
+        if (exercisesElm) exercisesElm.textContent = activity.exercises;
+        if (quizzesElm) quizzesElm.textContent = activity.quizzes;
+        if (challengesElm) challengesElm.textContent = activity.challenges;
+      }
+      // Recompute sticky offsets after known source updates
+      RightHandSideMenu._updateStickyVars();
+    } catch (e) {}
+  };
+  RightHandSideMenu._onExternalDataChange = function () {
+    if (RightHandSideMenu._rendered) {
+      RightHandSideMenu._updateFromKnownSources();
+    } else {
+      RightHandSideMenu.init();
+    }
+  };
+
+  // Increment XP in the right-hand side menu
+  RightHandSideMenu.incrementXp = function (amount) {
+    try {
+      var root = document.querySelector('.rhs-menu .sidebar');
+      if (!root) return;
+      var xpElm = root.querySelector('#rhs-xp');
+      if (!xpElm) return;
+      var current = parseInt(xpElm.textContent, 10);
+      if (isNaN(current)) current = 0;
+      var inc = typeof amount === 'number' ? amount : 10;
+      var next = current + inc;
+      xpElm.textContent = next;
+
+      // Also update Pathfinder._userXp to keep it in sync
+      if (typeof Pathfinder !== 'undefined') {
+        var base = typeof Pathfinder._userXp === 'number' ? Pathfinder._userXp : current;
+        Pathfinder._userXp = base + inc;
+      }
+
+      // Update TopNavBar cached data if available
+      if (typeof TopNavBar !== 'undefined' && TopNavBar.mylUserLiteState) {
+        TopNavBar.mylUserLiteState.xp = next;
+      }
+
+      // Update tooltips with new XP value
+      RightHandSideMenu._updateTooltips();
+    } catch (e) {
+      console.error('Error incrementing XP in right-hand side menu:', e);
+    }
+  };
+
+  // Increment lesson score for current topic and update progress bar
+  RightHandSideMenu.incrementCurrentTopicLesson = function () {
+    try {
+      // Get current topic UUID
+      var currentTopicUuid = typeof MyLearning !== 'undefined' ? MyLearning.topicId : null;
+      if (!currentTopicUuid) return;
+
+      // Find and update the topic in _allTopics
+      if (RightHandSideMenu._allTopics && RightHandSideMenu._allTopics.length > 0) {
+        var topicEntry = RightHandSideMenu._allTopics.find(function (_ref9) {
+          var _ref0 = _slicedToArray(_ref9, 1),
+            uuid = _ref0[0];
+          return uuid === currentTopicUuid;
+        });
+        if (topicEntry && topicEntry[1]) {
+          var topic = topicEntry[1];
+          // Increment lessonsScore by 1
+          topic.lessonsScore = (topic.lessonsScore || 0) + 1;
+
+          // Update progress bars to reflect the change
+          var topicsObj = RightHandSideMenu._allTopics.reduce(function (acc, _ref1) {
+            var _ref10 = _slicedToArray(_ref1, 2),
+              uuid = _ref10[0],
+              topic = _ref10[1];
+            acc[uuid] = topic;
+            return acc;
+          }, {});
+          RightHandSideMenu._updateProgressBars(topicsObj);
+        }
+      }
+    } catch (e) {
+      console.error('Error incrementing current topic lesson:', e);
+    }
+  };
+
+  // Attach user-data listeners once per source, retry if dependencies missing
+  RightHandSideMenu._attachPayingDataListeners = function () {
+    try {
+      if (typeof Util === 'undefined' || typeof Util.objFieldOnSetCallback !== 'function') {
+        throw new Error('Util.objFieldOnSetCallback missing');
+      }
+      if (typeof UserSession !== 'undefined' && !RightHandSideMenu._listenerAttached['UserSession.loggedIn']) {
+        RightHandSideMenu._listenerAttached['UserSession.loggedIn'] = true;
+        Util.objFieldOnSetCallback({
+          scopeRef: UserSession,
+          fieldName: 'loggedIn',
+          callback: RightHandSideMenu._onExternalDataChange
+        });
+      }
+      if (typeof TopNavBar !== 'undefined') {
+        if (!RightHandSideMenu._listenerAttached['TopNavBar.cachedUserData']) {
+          RightHandSideMenu._listenerAttached['TopNavBar.cachedUserData'] = true;
+          Util.objFieldOnSetCallback({
+            scopeRef: TopNavBar,
+            fieldName: 'cachedUserData',
+            callback: RightHandSideMenu._onExternalDataChange
+          });
+        }
+        if (!RightHandSideMenu._listenerAttached['TopNavBar.subscriptionPlan']) {
+          RightHandSideMenu._listenerAttached['TopNavBar.subscriptionPlan'] = true;
+          Util.objFieldOnSetCallback({
+            scopeRef: TopNavBar,
+            fieldName: 'subscriptionPlan',
+            callback: RightHandSideMenu._onExternalDataChange
+          });
+        }
+        if (!RightHandSideMenu._listenerAttached['TopNavBar.mylUserLiteState']) {
+          RightHandSideMenu._listenerAttached['TopNavBar.mylUserLiteState'] = true;
+          Util.objFieldOnSetCallback({
+            scopeRef: TopNavBar,
+            fieldName: 'mylUserLiteState',
+            callback: RightHandSideMenu._onExternalDataChange
+          });
+        }
+      }
+    } catch (e) {
+      // Silently fail if dependencies are not available
+    }
+  };
+
+  // Early init - can run immediately when script loads
+  RightHandSideMenu._earlyInit = function () {
+    if (RightHandSideMenu._rendered) return;
+
+    // Only show on lesson or page types
+    if (typeof MyLearning !== 'undefined' && MyLearning.pageType) {
+      if (MyLearning.pageType !== 'lesson' && MyLearning.pageType !== 'page') {
+        return;
+      }
+    } else {
+      return;
+    }
+
+    // Only show on recognized tutorial topics/paths
+    var path = window.location.pathname;
+    var pathParts = path.split('/').filter(function (part) {
+      return part.length > 0;
+    });
+
+    // Don't show on specific hidden paths
+    if (RightHandSideMenu._hiddenPaths.indexOf(path) !== -1) {
+      return;
+    }
+
+    // Don't show on root domain or if no meaningful path
+    if (pathParts.length === 0) {
+      return;
+    }
+
+    // Check if the first path part matches a recognized topic
+    var firstPart = pathParts[0].toLowerCase();
+    // Handle special cases
+    if (firstPart === 'javascript') firstPart = 'js';
+    if (firstPart === 'csharp') firstPart = 'cs';
+
+    // Only show if it's a recognized topic from our topicMap
+    if (!RightHandSideMenu._topicMap[firstPart]) {
+      return;
+    }
+
+    // Early check - if user is paying, show immediately
+    if (!RightHandSideMenu._userIsPayingEarly()) {
+      return;
+    }
+    var main = document.getElementById('main');
+    if (!main) {
+      return;
+    }
+    RightHandSideMenu._injectCss();
+    var rightCol = document.getElementById('right-side-menu');
+    var mainParent = main.parentNode;
+    if (!rightCol) {
+      try {
+        rightCol = document.createElement('div');
+        rightCol.id = 'right-side-menu';
+        rightCol.className = 'rhs-menu';
+        rightCol.style.cssText = 'width:270px;visibility:hidden';
+        if (main.nextSibling) {
+          mainParent.insertBefore(rightCol, main.nextSibling);
+        } else {
+          mainParent.appendChild(rightCol);
+        }
+        document.body.classList.add('rhs-layout-active');
+        mainParent.classList.add('rhs-two-col');
+      } catch (e) {
+        return;
+      }
+    }
+    if (!rightCol) return;
+
+    // Ensure the class is always present
+    if (!rightCol.classList.contains('rhs-menu')) {
+      rightCol.classList.add('rhs-menu');
+    }
+    if (RightHandSideMenu._rendered) return;
+    RightHandSideMenu._render(rightCol);
+
+    // Make the reserved space visible now that content is loaded
+    rightCol.style.visibility = 'visible';
+
+    // Update with available data
+    RightHandSideMenu._updateFromKnownSources();
+
+    // Load API data lazily (non-blocking)
+    RightHandSideMenu._loadAPIData();
+
+    // Wire up to lesson finished event for XP sync with bottom status
+    if (typeof MyLearning !== 'undefined' && MyLearning.lessonFinishedListeners) {
+      MyLearning.lessonFinishedListeners['right-hand-side-menu-on-finish'] = function () {
+        // Get XP amount based on subscription plan (same as BottomStatus)
+        var xpAmount = typeof SharedAPI !== 'undefined' && typeof SharedAPI.getXpAmountForCurrentUser === 'function' ? SharedAPI.getXpAmountForCurrentUser() : 10;
+        RightHandSideMenu.incrementXp(xpAmount);
+
+        // Increment lesson score and update progress bar for current topic
+        RightHandSideMenu.incrementCurrentTopicLesson();
+      };
+    }
+
+    // Listen for TopNavBar data updates
+    try {
+      if (typeof Util !== 'undefined' && typeof Util.objFieldOnSetCallback === 'function' && typeof TopNavBar !== 'undefined') {
+        Util.objFieldOnSetCallback({
+          scopeRef: TopNavBar,
+          fieldName: 'cachedUserData',
+          callback: function callback() {
+            RightHandSideMenu._updateFromKnownSources();
+          }
+        });
+      }
+    } catch (e) {}
+    try {
+      document.body.classList.add('rhs-layout-active');
+      if (mainParent && !mainParent.classList.contains('rhs-two-col')) {
+        mainParent.classList.add('rhs-two-col');
+      }
+
+      // Apply flexbox styles to rhs-two-col container
+      if (mainParent && mainParent.classList && mainParent.classList.contains('rhs-two-col')) {
+        mainParent.style.display = 'flex';
+        mainParent.style.alignItems = 'stretch';
+        mainParent.style.gap = '0';
+      }
+    } catch (e) {}
+  };
+
+  // Init
+  RightHandSideMenu.init = function () {
+    RightHandSideMenu._attachPayingDataListeners();
+    if (RightHandSideMenu._rendered) return;
+
+    // Only show on lesson or page types
+    if (typeof MyLearning !== 'undefined' && MyLearning.pageType) {
+      if (MyLearning.pageType !== 'lesson' && MyLearning.pageType !== 'page') {
+        return;
+      }
+    } else {
+      return;
+    }
+
+    // Only show on recognized tutorial topics/paths
+    var path = window.location.pathname;
+    var pathParts = path.split('/').filter(function (part) {
+      return part.length > 0;
+    });
+
+    // Debug logging
+    //console.log('RHS Menu - Path:', path, 'PathParts:', pathParts);
+
+    // Don't show on specific hidden paths
+    if (RightHandSideMenu._hiddenPaths.indexOf(path) !== -1) {
+      console.log('RHS Menu - Hiding: Path in hidden list:', path);
+      return;
+    }
+
+    // Don't show on root domain or if no meaningful path
+    if (pathParts.length === 0) {
+      console.log('RHS Menu - Hiding: No path parts');
+      return;
+    }
+
+    // Check if the first path part matches a recognized topic
+    var firstPart = pathParts[0].toLowerCase();
+    // Handle special cases
+    if (firstPart === 'javascript') firstPart = 'js';
+    if (firstPart === 'csharp') firstPart = 'cs';
+
+    // Only show if it's a recognized topic from our topicMap
+    if (!RightHandSideMenu._topicMap[firstPart]) {
+      console.log('RHS Menu - Hiding: Not a recognized topic');
+      return;
+    }
+    if (!RightHandSideMenu._userIsPaying()) {
+      return;
+    }
+    var main = document.getElementById('main');
+    if (!main) {
+      return;
+    }
+    RightHandSideMenu._injectCss();
+    var rightCol = document.getElementById('right-side-menu');
+    var mainParent = main.parentNode;
+    if (!rightCol) {
+      try {
+        rightCol = document.createElement('div');
+        rightCol.id = 'right-side-menu';
+        rightCol.className = 'rhs-menu';
+        rightCol.style.cssText = 'width:270px;visibility:hidden';
+        if (main.nextSibling) {
+          mainParent.insertBefore(rightCol, main.nextSibling);
+        } else {
+          mainParent.appendChild(rightCol);
+        }
+        document.body.classList.add('rhs-layout-active');
+        mainParent.classList.add('rhs-two-col');
+      } catch (e) {
+        return;
+      }
+    }
+    if (!rightCol) return;
+
+    // Ensure the class is always present
+    if (!rightCol.classList.contains('rhs-menu')) {
+      rightCol.classList.add('rhs-menu');
+    }
+    if (RightHandSideMenu._rendered) return;
+    RightHandSideMenu._render(rightCol);
+
+    // Make the reserved space visible now that content is loaded
+    rightCol.style.visibility = 'visible';
+
+    // Update with available data
+    RightHandSideMenu._updateFromKnownSources();
+
+    // Load API data lazily (non-blocking)
+    RightHandSideMenu._loadAPIData();
+
+    // Wire up to lesson finished event for XP sync with bottom status
+    if (typeof MyLearning !== 'undefined' && MyLearning.lessonFinishedListeners) {
+      MyLearning.lessonFinishedListeners['right-hand-side-menu-on-finish'] = function () {
+        // Get XP amount based on subscription plan (same as BottomStatus)
+        var xpAmount = typeof SharedAPI !== 'undefined' && typeof SharedAPI.getXpAmountForCurrentUser === 'function' ? SharedAPI.getXpAmountForCurrentUser() : 10;
+        RightHandSideMenu.incrementXp(xpAmount);
+
+        // Increment lesson score and update progress bar for current topic
+        RightHandSideMenu.incrementCurrentTopicLesson();
+      };
+    }
+
+    // Listen for TopNavBar data updates
+    try {
+      if (typeof Util !== 'undefined' && typeof Util.objFieldOnSetCallback === 'function' && typeof TopNavBar !== 'undefined') {
+        Util.objFieldOnSetCallback({
+          scopeRef: TopNavBar,
+          fieldName: 'cachedUserData',
+          callback: function callback() {
+            RightHandSideMenu._updateFromKnownSources();
+          }
+        });
+      }
+    } catch (e) {}
+    try {
+      document.body.classList.add('rhs-layout-active');
+      if (mainParent && !mainParent.classList.contains('rhs-two-col')) {
+        mainParent.classList.add('rhs-two-col');
+      }
+
+      // Apply flexbox styles to rhs-two-col container
+      if (mainParent && mainParent.classList && mainParent.classList.contains('rhs-two-col')) {
+        mainParent.style.display = 'flex';
+        mainParent.style.alignItems = 'stretch';
+        mainParent.style.gap = '0';
+      }
+    } catch (e) {}
+  };
+  window.RightHandSideMenu = RightHandSideMenu;
+
+  // Try early initialization immediately when script loads
+  // This will show the menu immediately if user is logged in and has a non-free plan
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', function () {
+      RightHandSideMenu._earlyInit();
+    });
+  } else {
+    // DOM is already ready, try immediately
+    RightHandSideMenu._earlyInit();
+  }
+})();
